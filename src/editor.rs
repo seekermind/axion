@@ -1,7 +1,10 @@
 mod terminal;
 use crossterm::event::{read, Event, Event::Key, KeyCode::Char, KeyEvent, KeyModifiers};
 use terminal::{Terminal, Size, Position};
-use std::io::Error;
+use std::{io::Error, u16};
+
+const NAME: &str = env!("CARGO_PKG_NAME");
+const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 pub struct Editor {
     should_quit: bool,
@@ -68,14 +71,14 @@ impl Editor {
         Ok(())
     }
     fn print_welcome() -> Result<(), Error> {
-        let program_name = "Hecto";
-        let version_info = "Version 0.1";
+        let version_text = format!("Version - {VERSION}");
+        let name_len = NAME.len() as u16;
+        let version_len = version_text.len() as u16;
         let Size { height, width } = Terminal::size()?;
-        Terminal::move_cursor_to(Position { x: (width/2 - (program_name.len() as u16)/2) , y: height/3 })?;
-        Terminal::print("Hecto")?;
-        Terminal::move_cursor_to(Position { x: (width/2 - (version_info.len() as u16)/2) , y: height/3 + 1 })?;
-        Terminal::print("Version 0.1")?;
-        Terminal::execute()?;
+        Terminal::move_cursor_to(Position { x: (width/2 - name_len/2) , y: height/3 })?;
+        Terminal::print(NAME)?;
+        Terminal::move_cursor_to(Position { x: (width/2 - (version_len)/2) , y: height/3 + 1 })?;
+        Terminal::print(version_text)?;
         Ok(())
     }
 }
