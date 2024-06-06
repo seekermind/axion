@@ -1,18 +1,26 @@
+mod buffer;
+use buffer::Buffer;
+
 use super::terminal::{Size, Terminal};
 use std::io::Error;
 
 const NAME: &str = env!("CARGO_PKG_NAME");
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-pub struct View;
+#[derive(Default)]
+pub struct View {
+    buffer: Buffer,
+}
 
 impl View {
-    pub fn render() -> Result<(), Error> {
+    pub fn render(&self) -> Result<(), Error> {
         let Size { height,.. } = Terminal::size()?;
-        Terminal::clear_line()?;
-        Terminal::print("Hellow, World!\r\n")?;
-        for current_row in 1..height {
-            Terminal::clear_line()?;
+        for current_row in 0..height {
+            if let Some(line) = self.buffer.lines.get(current_row) {
+                Terminal::print(line)?;
+                Terminal::print("\r\n")?;
+                continue;
+            }
             if current_row == height / 3 {
                 Self::print_pkg_name()?;
             } else if current_row == (height/3).saturating_add(1) {
