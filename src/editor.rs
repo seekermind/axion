@@ -1,10 +1,9 @@
 mod terminal;
+mod view;
 use crossterm::event::{read, Event, Event::Key, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use view::View;
 use std::{cmp::min, io::Error};
 use terminal::{Position, Size, Terminal};
-
-const NAME: &str = env!("CARGO_PKG_NAME");
-const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[derive(Clone, Copy, Default)]
 struct Location {
@@ -53,7 +52,9 @@ impl Editor {
                 | KeyCode::Left
                 | KeyCode::Right
                 | KeyCode::End
-                | KeyCode::Home => {
+                | KeyCode::Home 
+                | KeyCode::PageUp
+                | KeyCode::PageDown => {
                     self.move_location(*code)?;
                 }
                 _ => (),
@@ -71,6 +72,8 @@ impl Editor {
             KeyCode::Right => x = min(width.saturating_sub(1), x.saturating_add(1)),
             KeyCode::End => x = width.saturating_sub(1),
             KeyCode::Home => x = 0,
+            KeyCode::PageUp => y = 0,
+            KeyCode::PageDown => y = height.saturating_sub(1),
             _ => (),
         }
         self.location = Location { x, y };
@@ -83,8 +86,7 @@ impl Editor {
             Terminal::clear_screen()?;
             Terminal::print("Danke.\r\n")?;
         } else {
-            Self::draw_tildes()?;
-            Self::print_welcome()?;
+            View::render()?;
             Terminal::move_cursor_to(Position {
                 x: self.location.x,
                 y: self.location.y,
@@ -92,41 +94,6 @@ impl Editor {
         }
         Terminal::show_cursor()?;
         Terminal::execute()?;
-        Ok(())
-    }
-    fn draw_tildes() -> Result<(), Error> {
-        let Size { height, .. } = Terminal::size()?;
-        for current_row in 0..height {
-            Terminal::clear_line()?;
-            Terminal::print("~")?;
-            if current_row.saturating_add(1) < height {
-                Terminal::print("\r\n")?;
-            }
-        }
-        Ok(())
-    }
-    fn print_welcome() -> Result<(), Error> {
-        let version_text = format!("Version - {VERSION}");
-
-        #[allow(clippy::cast_possible_truncation)]
-        let name_len = NAME.len();
-        #[allow(clippy::cast_possible_truncation)]
-        let version_len = version_text.len();
-
-        let Size { height, width } = Terminal::size()?;
-        Terminal::move_cursor_to(Position {
-            #[allow(clippy::arithmetic_side_effects)]
-            x: (width / 2) - (name_len / 2),
-            y: height / 3,
-        })?;
-        Terminal::print(NAME)?;
-        Terminal::move_cursor_to(Position {
-            #[allow(clippy::arithmetic_side_effects)]
-            x: (width / 2) - (version_len / 2),
-            #[allow(clippy::arithmetic_side_effects)]
-            y: (height / 3) + 1,
-        })?;
-        Terminal::print(version_text)?;
         Ok(())
     }
 }
