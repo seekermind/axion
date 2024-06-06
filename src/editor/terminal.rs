@@ -12,7 +12,7 @@ use std::io::{stdout, Error, Write};
 /// And should you attempt to set the cursor out of these bounds, it will also be truncated.
 pub struct Terminal;
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Default)]
 pub struct Size {
     pub height: usize,
     pub width: usize,

@@ -1,9 +1,9 @@
 mod terminal;
 mod view;
-use crossterm::event::{read, Event, Event::Key, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
-use view::View;
-use std::{env, cmp::min, io::Error};
+use crossterm::event::{read, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use std::{cmp::min, env, io::Error, usize};
 use terminal::{Position, Size, Terminal};
+use view::View;
 
 #[derive(Clone, Copy, Default)]
 struct Location {
@@ -33,35 +33,53 @@ impl Editor {
                 break;
             }
             let event = read()?;
-            self.evaluate_event(&event)?;
+            self.evaluate_event(event)?;
         }
         Ok(())
     }
-    fn evaluate_event(&mut self, event: &Event) -> Result<(), Error> {
-        if let Key(KeyEvent {
-            code,
-            modifiers,
-            kind: KeyEventKind::Press, // needed for Windows
-            ..
-        }) = event
-        {
-            match code {
-                KeyCode::Char('q') if *modifiers == KeyModifiers::CONTROL => {
+    // needless_pass_by_value: Event is not huge, so there is not a
+    // performance overhead in passing by value, and pattern matching in this
+    // function would be needlessly complicated if we pass by reference here.
+    #[allow(clippy::needless_pass_by_value)]
+    fn evaluate_event(&mut self, event: Event) -> Result<(), Error> {
+        match event {
+            Event::Key(KeyEvent {
+                code,
+                modifiers,
+                kind: KeyEventKind::Press,
+                ..
+            }) => match (code, modifiers) {
+                (KeyCode::Char('q'), KeyModifiers::CONTROL) => {
                     self.should_quit = true;
                 }
-                KeyCode::Up
-                | KeyCode::Down
-                | KeyCode::Left
-                | KeyCode::Right
-                | KeyCode::End
-                | KeyCode::Home 
-                | KeyCode::PageUp
-                | KeyCode::PageDown => {
-                    self.move_location(*code)?;
+                (
+                    KeyCode::Up
+                    | KeyCode::Down
+                    | KeyCode::Left
+                    | KeyCode::Right
+                    | KeyCode::End
+                    | KeyCode::Home
+                    | KeyCode::PageUp
+                    | KeyCode::PageDown,
+                    _,
+                ) => {
+                    self.move_location(code)?;
                 }
                 _ => (),
+            },
+            Event::Resize(width_u16, height_u16) => {
+
+                 // clippy::as_conversions: Will run into problems for rare edge case systems where usize < u16
+                #[allow(clippy::as_conversions)]
+                let width = width_u16 as usize;
+                #[allow(clippy::as_conversions)]
+                let height = height_u16 as usize;
+
+                self.view.resize( Size { height, width });
             }
+            _ => (),
         }
+
         Ok(())
     }
     fn move_location(&mut self, key_code: KeyCode) -> Result<(), Error> {
