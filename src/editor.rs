@@ -2,7 +2,7 @@ mod terminal;
 mod view;
 use crossterm::event::{read, Event, Event::Key, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use view::View;
-use std::{cmp::min, io::Error};
+use std::{env, cmp::min, io::Error};
 use terminal::{Position, Size, Terminal};
 
 #[derive(Clone, Copy, Default)]
@@ -20,6 +20,7 @@ pub struct Editor {
 impl Editor {
     pub fn run(&mut self) {
         Terminal::initialize().unwrap();
+        self.handle_args();
         let result = self.repl();
         Terminal::terminate().unwrap();
         result.unwrap();
@@ -80,7 +81,7 @@ impl Editor {
         self.location = Location { x, y };
         Ok(())
     }
-    fn refresh_screen(&self) -> Result<(), Error> {
+    fn refresh_screen(&mut self) -> Result<(), Error> {
         Terminal::hide_cursor()?;
         Terminal::move_cursor_to(Position::default())?;
         if self.should_quit {
@@ -96,5 +97,11 @@ impl Editor {
         Terminal::show_cursor()?;
         Terminal::execute()?;
         Ok(())
+    }
+    fn handle_args(&mut self) {
+        let args: Vec<String> = env::args().collect();
+        if let Some(first_arg) = args.get(1) {
+            self.view.load(first_arg);
+        }
     }
 }
