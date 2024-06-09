@@ -1,7 +1,12 @@
 mod terminal;
 mod view;
+use core::{cmp::min, panic};
 use crossterm::event::{read, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
-use std::{cmp::min, env, io::Error, usize};
+use std::{
+    env,
+    io::Error,
+    panic::{set_hook, take_hook},
+};
 use terminal::{Position, Size, Terminal};
 use view::View;
 
@@ -10,7 +15,6 @@ struct Location {
     x: usize,
     y: usize,
 }
-#[derive(Default)]
 pub struct Editor {
     should_quit: bool,
     location: Location,
@@ -18,30 +22,47 @@ pub struct Editor {
 }
 
 impl Editor {
-    pub fn run(&mut self) {
-        Terminal::initialize().unwrap();
-        self.handle_args();
-        let result = self.repl();
-        Terminal::terminate().unwrap();
-        result.unwrap();
+    pub fn new() -> Result<Self, Error> {
+        let current_hook = take_hook();
+        set_hook(Box::new(move |panic_info| {
+            let _ = Terminal::terminate();
+            current_hook(panic_info);
+        }));
+        Terminal::initialize()?;
+        let mut view = View::default();
+        let args: Vec<String> = env::args().collect();
+        if let Some(file_name) = args.get(1) {
+            view.load(file_name);
+        }
+        Ok(Self {
+            should_quit: false,
+            location: Location::default(),
+            view,
+        })
     }
 
-    fn repl(&mut self) -> Result<(), Error> {
+    pub fn run(&mut self) {
         loop {
-            self.refresh_screen()?;
+            self.refresh_screen();
             if self.should_quit {
                 break;
             }
-            let event = read()?;
-            self.evaluate_event(event)?;
+            match read() {
+                Ok(event) => self.evaluate_event(event),
+                Err(err) => {
+                    #[cfg(debug_assertions)]
+                    {
+                        panic!("Could not read event: {err:?}");
+                    }
+                }
+            }
         }
-        Ok(())
     }
     // needless_pass_by_value: Event is not huge, so there is not a
     // performance overhead in passing by value, and pattern matching in this
     // function would be needlessly complicated if we pass by reference here.
     #[allow(clippy::needless_pass_by_value)]
-    fn evaluate_event(&mut self, event: Event) -> Result<(), Error> {
+    fn evaluate_event(&mut self, event: Event) {
         match event {
             Event::Key(KeyEvent {
                 code,
@@ -63,28 +84,25 @@ impl Editor {
                     | KeyCode::PageDown,
                     _,
                 ) => {
-                    self.move_location(code)?;
+                    self.move_location(code);
                 }
                 _ => (),
             },
             Event::Resize(width_u16, height_u16) => {
-
-                 // clippy::as_conversions: Will run into problems for rare edge case systems where usize < u16
+                // clippy::as_conversions: Will run into problems for rare edge case systems where usize < u16
                 #[allow(clippy::as_conversions)]
                 let width = width_u16 as usize;
                 #[allow(clippy::as_conversions)]
                 let height = height_u16 as usize;
 
-                self.view.resize( Size { height, width });
+                self.view.resize(Size { height, width });
             }
             _ => (),
         }
-
-        Ok(())
     }
-    fn move_location(&mut self, key_code: KeyCode) -> Result<(), Error> {
+    fn move_location(&mut self, key_code: KeyCode) {
         let Location { mut x, mut y } = self.location;
-        let Size { height, width } = Terminal::size()?;
+        let Size { height, width } = Terminal::size().unwrap_or_default();
         match key_code {
             KeyCode::Up => y = y.saturating_sub(1),
             KeyCode::Down => y = min(height.saturating_sub(1), y.saturating_add(1)),
@@ -97,29 +115,24 @@ impl Editor {
             _ => (),
         }
         self.location = Location { x, y };
-        Ok(())
     }
-    fn refresh_screen(&mut self) -> Result<(), Error> {
-        Terminal::hide_cursor()?;
-        Terminal::move_cursor_to(Position::default())?;
+    fn refresh_screen(&mut self) {
+        let _ = Terminal::hide_cursor();
+        self.view.render();
+        let _ = Terminal::move_cursor_to(Position {
+            x: self.location.x,
+            y: self.location.y,
+        });
+        let _ = Terminal::show_cursor();
+        let _ = Terminal::execute();
+    }
+}
+
+impl Drop for Editor {
+    fn drop(&mut self) {
+        let _ = Terminal::terminate();
         if self.should_quit {
-            Terminal::clear_screen()?;
-            Terminal::print("Danke.\r\n")?;
-        } else {
-            self.view.render()?;
-            Terminal::move_cursor_to(Position {
-                x: self.location.x,
-                y: self.location.y,
-            })?;
-        }
-        Terminal::show_cursor()?;
-        Terminal::execute()?;
-        Ok(())
-    }
-    fn handle_args(&mut self) {
-        let args: Vec<String> = env::args().collect();
-        if let Some(first_arg) = args.get(1) {
-            self.view.load(first_arg);
+            let _ = Terminal::print("Danke\r\n");
         }
     }
 }

@@ -1,8 +1,7 @@
 mod buffer;
 use buffer::Buffer;
 
-use super::terminal::{Position, Size, Terminal};
-use std::io::Error;
+use super::terminal::{Size, Terminal};
 
 const NAME: &str = env!("CARGO_PKG_NAME");
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -23,13 +22,13 @@ impl Default for View {
 }
 
 impl View {
-    pub fn render(&mut self) -> Result<(), Error> {
+    pub fn render(&mut self) {
         if !self.needs_redraw {
-            return Ok(());
+            return;
         }
         let Size { height, width } = self.size;
         if height == 0 || width == 0 {
-            return Ok(());
+            return;
         }
         for current_row in 0..height {
             if let Some(line) = self.buffer.lines.get(current_row) {
@@ -39,18 +38,16 @@ impl View {
                     line
                 };
 
-                Self::render_line(current_row, truncated_line)?;
+                Self::render_line(current_row, truncated_line);
             } else if current_row == height / 3 && self.buffer.is_empty() {
-                Self::render_line(current_row, &Self::pkg_name(width) )?;
+                Self::render_line(current_row, &Self::pkg_name(width) );
             } else if current_row == (height / 3).saturating_add(1) && self.buffer.is_empty() {
-                Self::render_line(current_row, &Self::pkg_version(width))?;
+                Self::render_line(current_row, &Self::pkg_version(width));
             } else {
-                Self::render_line(current_row, "~")?;
+                Self::render_line(current_row, "~");
             }
         }
-        Terminal::move_cursor_to(Position { x: 0, y: 0 })?;
         self.needs_redraw = false;
-        Ok(())
     }
     fn pkg_name(width: usize) -> String {
         let name_len = NAME.len();
@@ -90,10 +87,8 @@ impl View {
         self.size = to_size;
         self.needs_redraw = true;
     }
-    fn render_line(at: usize, line_text: &str) -> Result<(), Error> {
-        Terminal::move_cursor_to(Position { x: 0, y: at })?;
-        Terminal::clear_line()?;
-        Terminal::print(line_text)?;
-        Ok(())
+    fn render_line(at: usize, line_text: &str) {
+        let result = Terminal::print_line(at, line_text);
+        debug_assert!(result.is_ok(), "Failed to render line."); 
     }
 }
